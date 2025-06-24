@@ -6,6 +6,66 @@
     <title>Unity Web Player | 1JuegoDescubre</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* ¡Importante! Evita scroll en el documento principal del juego */
+      }
+      #unity-container {
+        position: absolute; /* Para que ocupe todo el espacio disponible */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex; /* Para centrar el canvas si no ocupa todo el espacio */
+        justify-content: center;
+        align-items: center;
+        overflow: hidden; /* Evita que el contenedor de Unity genere scroll propio */
+      }
+      #unity-canvas {
+        display: block; /* Elimina espacio extra que algunos navegadores añaden */
+        width: 100%; /* El canvas debe ocupar el 100% de su contenedor */
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        /* max-width y max-height son útiles si quieres una resolución máxima sin barras,
+           pero con el iframe se suelen controlar desde el CSS padre.
+           Si el juego no debe deformarse, Unity se encargará de las barras negras. */
+        max-width: 100%;
+        max-height: 100%;
+      }
+      /* Oculta la barra de carga por defecto si el juego carga rápido */
+      #unity-loading-bar {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 300px; /* Ajusta según el diseño de tu barra de carga */
+        height: 30px;
+        background-color: #f3f3f3;
+        border: 1px solid #ccc;
+        display: none; /* Empezamos oculto y el JS lo muestra si es necesario */
+      }
+      #unity-progress-bar-full {
+        height: 100%;
+        background-color: #4CAF50;
+        width: 0%;
+      }
+      /* Puedes ajustar el tamaño del logo y título del footer para que quepan */
+      #unity-logo-title-footer {
+          max-width: 50%; /* O el valor que necesites */
+          height: auto;
+      }
+      #unity-build-title {
+          font-size: 0.9em; /* Ajusta el tamaño de la fuente si es necesario */
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+      }
+    </style>
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -25,6 +85,8 @@
     </div>
     <script>
       var canvas = document.querySelector("#unity-canvas");
+      var unityLoadingBar = document.querySelector("#unity-loading-bar"); // Añadido para controlar la barra de carga
+      var unityProgressBarFull = document.querySelector("#unity-progress-bar-full"); // Añadido para controlar el progreso
 
       // Shows a temporary message banner/ribbon for a few seconds, or
       // a permanent error message on top of the canvas if type=='error'.
@@ -70,7 +132,8 @@
       // Set this to false if you want to decouple this synchronization from
       // happening inside the engine, and you would instead like to size up
       // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = true;
+      // ¡ESTA ES LA LÍNEA CLAVE! Asegura que Unity adapte su renderizado al tamaño del canvas DOM.
+      config.matchWebGLToCanvasSize = true; // CAMBIO REALIZADO: ESTABLECIDO A TRUE Y DESCOMENTADO
 
       // If you would like all file writes inside Unity Application.persistentDataPath
       // directory to automatically persist so that the contents are remembered when
@@ -98,19 +161,21 @@
 
       } else {
         // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
-        canvas.style.width = "1920px";
-        canvas.style.height = "1080px";
+        // ¡ESTAS LÍNEAS HAN SIDO ELIMINADAS/COMENTADAS! Son la causa de las barras de scroll.
+        // canvas.style.width = "1920px";
+        // canvas.style.height = "1080px";
       }
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      // Referencia correcta a la barra de carga y el progreso
+      unityLoadingBar.style.display = "block"; 
 
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          unityProgressBarFull.style.width = 100 * progress + "%"; // Uso de la variable correcta
               }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
+                unityLoadingBar.style.display = "none"; // Ocultar usando la variable correcta
                 document.querySelector("#unity-fullscreen-button").onclick = () => {
                   unityInstance.SetFullscreen(1);
                 };
