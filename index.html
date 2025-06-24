@@ -5,11 +5,141 @@
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Unity Web Player | 1JuegoDescubre</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
+    <!-- Mantenemos el style.css externo para los estilos de la barra de carga, etc., pero lo complementamos -->
+    <link rel="stylesheet" href="TemplateData/style.css"> 
+    
+    <!-- ESTILOS CRÍTICOS PARA LA RESPONSIVIDAD Y ELIMINAR ESPACIOS/BARRAS -->
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden; /* ¡ESENCIAL! Evita el scroll en el documento principal del juego */
+      }
+      #unity-container {
+        /* Se usa 'position: absolute' y 0/0/0/0 para asegurar que ocupe TODO el espacio del body */
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%; /* Aseguramos que ocupe el 100% de ancho del body */
+        height: 100%; /* Aseguramos que ocupe el 100% de alto del body */
+        display: flex; /* Usamos flexbox para centrar el canvas */
+        justify-content: center; /* Centrado horizontal */
+        align-items: center; /* Centrado vertical */
+        overflow: hidden; /* ¡MUY IMPORTANTE! Evita que el contenedor de Unity genere scroll propio */
+      }
+      #unity-canvas {
+        /* El canvas debe ser un bloque para evitar espacios extra */
+        display: block; 
+        /* Ocupa el 100% del espacio de #unity-container, PERO MANTIENE LA RELACIÓN DE ASPECTO */
+        /* 'object-fit: contain' es el equivalente CSS de 'Blended' de Unity */
+        object-fit: contain; 
+        width: 100%; 
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        /* Los atributos HTML width/height se ignoran si el CSS es más específico */
+      }
+
+      /* Estilos para la barra de carga y el footer para que sean responsivos y no generen scroll */
+      #unity-loading-bar {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: clamp(200px, 80vw, 400px); /* Ancho responsivo para la barra de carga */
+        height: 25px; /* Altura de la barra de carga */
+        background-color: rgba(0, 0, 0, 0.5); /* Fondo semitransparente */
+        border-radius: 5px;
+        overflow: hidden;
+        display: none; /* Se mostrará con JavaScript cuando sea necesario */
+        z-index: 10; 
+        padding: 2px;
+        box-sizing: border-box;
+      }
+      #unity-logo {
+        position: absolute;
+        top: -60px; 
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100px;
+        height: 50px;
+        /* Asegúrate de que la ruta de tu logo sea correcta */
+        background: url('TemplateData/unity-logo-dark.png') no-repeat center / contain; 
+      }
+      #unity-progress-bar-empty {
+        width: 100%;
+        height: 100%;
+        background-color: #333;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      #unity-progress-bar-full {
+        width: 0%;
+        height: 100%;
+        background-color: #7FFF00;
+        border-radius: 3px;
+        transition: width 0.1s linear;
+      }
+
+      #unity-warning {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: rgba(255, 255, 0, 0.8);
+        padding: 5px;
+        text-align: center;
+        box-sizing: border-box;
+        font-size: 0.9em;
+        color: #333;
+        z-index: 10;
+        display: none;
+      }
+
+      #unity-footer {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 5px 10px;
+        border-radius: 5px;
+        color: white;
+        font-size: 0.8em;
+        z-index: 10; 
+        max-width: calc(100% - 20px);
+      }
+      #unity-logo-title-footer {
+        width: 25px;
+        height: 25px;
+        /* Asegúrate de que la ruta de tu logo sea correcta */
+        background: url('TemplateData/unity-logo-light.png') no-repeat center / contain; 
+      }
+      #unity-fullscreen-button {
+        width: 24px;
+        height: 24px;
+        /* Asegúrate de que la ruta de tu botón fullscreen sea correcta */
+        background: url('TemplateData/fullscreen-button.png') no-repeat center / contain; 
+        cursor: pointer;
+      }
+      #unity-build-title {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 150px;
+      }
+    </style>
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas"  tabindex="-1"></canvas>
+      <!-- Los atributos width y height se eliminan, el CSS los controlará -->
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
       <div id="unity-loading-bar">
         <div id="unity-logo"></div>
         <div id="unity-progress-bar-empty">
@@ -24,16 +154,15 @@
       </div>
     </div>
     <script>
+      // Referencias actualizadas a los elementos DOM
       var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var warningBanner = document.querySelector("#unity-warning");
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
+      // Función para mostrar mensajes de banner
       function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
         function updateBannerVisibility() {
           warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
         }
@@ -59,66 +188,55 @@
         frameworkUrl: buildUrl + "/PruebaDescubre.framework.js",
         codeUrl: buildUrl + "/PruebaDescubre.wasm",
         streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "1JuegoDescubre",
+        companyName: "DefaultCompany", // Asegúrate de que sea tu Company Name real
+        productName: "1JuegoDescubre", // Asegúrate de que sea tu Product Name real
         productVersion: "1.0",
         showBanner: unityShowBanner,
+        // ¡ESTA ES LA LÍNEA CLAVE AÑADIDA/MODIFICADA! Fuerza el devicePixelRatio a 1.
+        devicePixelRatio: 1, 
       };
 
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-       config.matchWebGLToCanvasSize = true;
+      // Esta línea asegura que Unity adapte su renderizado al tamaño del canvas DOM.
+      config.matchWebGLToCanvasSize = true;
 
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
+      // ... config.autoSyncPersistentDataPath (comentado) ...
 
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-
         var meta = document.createElement('meta');
         meta.name = 'viewport';
         meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
         document.getElementsByTagName('head')[0].appendChild(meta);
         document.querySelector("#unity-container").className = "unity-mobile";
         canvas.className = "unity-mobile";
-
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
-
-
+        // To lower canvas resolution on mobile devices:
+        // config.devicePixelRatio = 1; // Podrías querer esta línea activa aquí para móvil si necesitas más rendimiento
       } else {
         // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
+        // Estas líneas se configuran con CSS, no es necesario forzarlas aquí con JS.
         canvas.style.width = "100%";
         canvas.style.height = "100%";
       }
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      loadingBar.style.display = "block";
 
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
-
-              }).catch((message) => {
-                alert(message);
-              });
+          progressBarFull.style.width = 100 * progress + "%";
+        }).then((unityInstance) => {
+          loadingBar.style.display = "none";
+          if (fullscreenButton) {
+            fullscreenButton.onclick = () => {
+              unityInstance.SetFullscreen(1);
             };
+          }
+        }).catch((message) => {
+          // Usamos console.error en lugar de alert para no interrumpir al usuario
+          console.error("Error al cargar el juego Unity:", message); 
+          // O podrías mostrar un mensaje de error personalizado en un div en la página
+        });
+      };
 
       document.body.appendChild(script);
 
